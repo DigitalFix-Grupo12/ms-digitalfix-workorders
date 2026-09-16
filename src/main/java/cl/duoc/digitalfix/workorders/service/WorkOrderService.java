@@ -14,7 +14,11 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.Instant;
 import java.util.List;
 
-/** Reglas de negocio de ordenes de trabajo (dueño exclusivo de work_orders). */
+/**
+ * Reglas de negocio de ordenes de trabajo (dueño exclusivo de work_orders).
+ * Autorizacion a nivel de dato: un Cliente solo ve y crea sus propias ordenes
+ * (clienteId = usuario del token). Admin/Supervisor ven todas.
+ */
 @Service
 public class WorkOrderService {
 
@@ -27,32 +31,55 @@ public class WorkOrderService {
     }
 
     @Transactional(readOnly = true)
-    public List<WorkOrder> list(WorkOrderStatus status) {
+    public List<WorkOrder> list(WorkOrderStatus status, Caller caller) {
+        if (caller.isCustomerOnly()) {
+            String owner = caller.username();
+            return status == null
+                ? repository.findByClienteIdOrderByIdDesc(owner)
+                : repository.findByClienteIdAndStatusOrderByIdDesc(owner, status);
+        }
         return status == null
             ? repository.findAllByOrderByIdDesc()
             : repository.findByStatusOrderByIdDesc(status);
     }
 
     @Transactional(readOnly = true)
-    public WorkOrder get(Long id) {
-        return repository.findById(id)
-            .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Orden no encontrada: " + id));
+    public WorkOrder get(Long id, Caller caller) {
+        WorkOrder order = repository.findById(id)
+            .orElseThrow(() -> notFound(id));
+        // A un cliente no se le revela la existencia de ordenes ajenas (404, no 403)
+        if (caller.isCustomerOnly() && !caller.username().equalsIgnoreCase(order.getClienteId())) {
+            throw notFound(id);
+        }
+        return order;
     }
 
     @Transactional
-    public WorkOrder create(WorkOrderDto dto, String usuario) {
+    public WorkOrder create(WorkOrderDto dto, Caller caller) {
+        String clienteId;
+        if (caller.isCustomerOnly()) {
+            clienteId = caller.username();
+        } else if (dto.clienteId() == null || dto.clienteId().isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Falta clienteId: indica el cliente de la orden");
+        } else {
+            clienteId = dto.clienteId().trim();
+        }
+
         WorkOrder order = new WorkOrder();
         order.setDescripcion(dto.descripcion().trim());
-        order.setClienteId(dto.clienteId().trim());
+        order.setClienteId(clienteId);
         order.setStatus(WorkOrderStatus.CREADA);
         WorkOrder saved = repository.save(order);
-        audit.record(usuario, "CREO orden #" + saved.getId(), saved.getId());
+        audit.record(caller.username(), "CREO orden #" + saved.getId(), saved.getId());
         return saved;
     }
 
     @Transactional
-    public WorkOrder changeStatus(Long id, StatusChangeDto dto, String usuario) {
-        WorkOrder order = get(id);
+    public WorkOrder changeStatus(Long id, StatusChangeDto dto, Caller caller) {
+        if (caller.isCustomerOnly()) {
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "El rol Cliente no puede cambiar estados");
+        }
+        WorkOrder order = get(id, caller);
         WorkOrderStatus from = order.getStatus();
         WorkOrderStatus to = dto.status();
 
@@ -78,7 +105,11 @@ public class WorkOrderService {
         String accion = to == WorkOrderStatus.ASIGNADA
             ? "ASIGNO orden #%d a %s".formatted(id, order.getTecnicoId())
             : "CAMBIO orden #%d: %s -> %s".formatted(id, from, to);
-        audit.record(usuario, accion, id);
+        audit.record(caller.username(), accion, id);
         return saved;
+    }
+
+    private static ResponseStatusException notFound(Long id) {
+        return new ResponseStatusException(HttpStatus.NOT_FOUND, "Orden no encontrada: " + id);
     }
 }
