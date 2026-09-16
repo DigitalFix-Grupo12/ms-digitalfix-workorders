@@ -1,0 +1,22 @@
+# Perfil "cloud": base de datos Amazon RDS PostgreSQL.
+# Se activa con SPRING_PROFILES_ACTIVE=cloud. Las credenciales NO estan en el
+# repo: la EC2 las lee de SSM Parameter Store y las expone como variables de entorno.
+# Cada microservicio es propietario de su propio schema (workorders).
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT:5432}/${DB_NAME:digitalfix}?currentSchema=workorders&sslmode=require
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 3
+      minimum-idle: 1
+      connection-timeout: 10000
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        default_schema: workorders
+        hbm2ddl:
+          create_namespaces: true
