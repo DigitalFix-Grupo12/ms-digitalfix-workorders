@@ -1,5 +1,7 @@
 # ms-digitalfix-workorders (puerto 8082)
 
+[![CI](https://github.com/DigitalFix-Grupo12/ms-digitalfix-workorders/actions/workflows/ci.yml/badge.svg)](https://github.com/DigitalFix-Grupo12/ms-digitalfix-workorders/actions/workflows/ci.yml)
+
 Propietario de las ordenes de trabajo y de la maquina de estados:
 `CREADA -> ASIGNADA -> EN_DESPLAZAMIENTO -> EN_EJECUCION -> CERRADA` (`CANCELADA` antes de ejecutar).
 No se puede ejecutar sin asignar tecnico. Cada cambio publica un evento en `ms-digitalfix-audit`.
