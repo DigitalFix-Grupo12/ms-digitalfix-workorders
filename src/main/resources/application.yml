@@ -17,10 +17,52 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
+  # Conexion al cluster RabbitMQ (2 nodos). Si un nodo cae, el cliente
+  # reconecta al otro de la lista. Credenciales por variable de entorno.
+  rabbitmq:
+    addresses: ${RABBITMQ_ADDRESSES:localhost:5672,localhost:5673}
+    username: ${RABBITMQ_USERNAME:digitalfix}
+    password: ${RABBITMQ_PASSWORD:digitalfix}
+    connection-timeout: 3s
+    # Confirmaciones del broker: ack/nack por cada mensaje publicado y
+    # devolucion (return) de los mensajes que no encuentran cola destino.
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+      retry:
+        enabled: true
+        max-attempts: 2
+        initial-interval: 500ms
 
 digitalfix:
   services:
     audit-url: ${AUDIT_URL:http://localhost:8085}
+
+  # ------------------------------------------------------------------
+  # Mensajeria RabbitMQ: UNICO lugar donde se definen nombres de
+  # exchanges y routing keys que usa este productor. Las clases Java
+  # solo leen estos valores (RabbitMessagingProperties).
+  # La topologia completa (colas, DLQ y bindings) la declara
+  # ms-digitalfix-notify, que es el consumidor.
+  # ------------------------------------------------------------------
+  rabbitmq:
+    enabled: ${RABBITMQ_ENABLED:true}
+    source: ms-digitalfix-workorders
+    exchanges:
+      direct: cmd.direct        # comandos punto a punto (clave exacta)
+      topic: cmd.topic          # eventos con patron (email.*, dispatch.#, report.*)
+      dead-letter: cmd.dead.dlx # destino de mensajes rechazados (DLQ)
+    # Que se publica en cada caso de uso: exchange (direct|topic) + routing key
+    publications:
+      email-created:    { exchange: topic,  routing-key: email.created }
+      email-assigned:   { exchange: topic,  routing-key: email.assigned }
+      email-enroute:    { exchange: topic,  routing-key: email.enroute }
+      email-closed:     { exchange: topic,  routing-key: email.closed }
+      email-cancelled:  { exchange: topic,  routing-key: email.cancelled }
+      dispatch-ticket:  { exchange: direct, routing-key: dispatch.ticket }
+      dispatch-status:  { exchange: topic,  routing-key: dispatch.status.update }
+      work-report:      { exchange: direct, routing-key: report.gen }
 
 management:
   endpoints:
