@@ -1,0 +1,9 @@
+# Tests sin broker: la mensajeria se reemplaza por un publicador en memoria
+# (ver RecordingCommandPublisher en los tests).
+digitalfix:
+  rabbitmq:
+    enabled: false
+management:
+  health:
+    rabbit:
+      enabled: false
