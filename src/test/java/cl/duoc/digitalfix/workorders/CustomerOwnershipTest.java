@@ -17,7 +17,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Autorizacion a nivel de dato: el rol Cliente solo accede a sus ordenes. */
-@SpringBootTest(properties = "digitalfix.services.audit-url=http://localhost:1")
+@SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class CustomerOwnershipTest {

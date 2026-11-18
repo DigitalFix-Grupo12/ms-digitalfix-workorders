@@ -24,7 +24,7 @@ class WorkOrderCommandTranslatorTest {
     private static WorkOrderStatusChangedEvent event(WorkOrderStatus from, WorkOrderStatus to, String tecnico) {
         return new WorkOrderStatusChangedEvent(7L, from, to, "ana@test", tecnico, "Falla tablero",
             Instant.parse("2026-10-10T10:00:00Z"), to == WorkOrderStatus.CERRADA ? Instant.parse("2026-10-10T12:00:00Z") : null,
-            "sup@test");
+            "sup@test", "Supervisor", Instant.parse("2026-10-10T12:00:00Z"));
     }
 
     private List<Publication> publications() {

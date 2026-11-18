@@ -35,9 +35,37 @@ spring:
         max-attempts: 2
         initial-interval: 500ms
 
+  # Productor Kafka: eventos de dominio de la orden (workorders.events).
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092,localhost:9093,localhost:9094}
+    client-id: ms-digitalfix-workorders
+    producer:
+      # La escritura se confirma cuando el lider y las replicas en sincronia (min 2) la tienen
+      acks: all
+      retries: 5
+      # Lotes pequenos y comprimidos: mas throughput sin agregar latencia perceptible
+      batch-size: 32768
+      compression-type: lz4
+      properties:
+        enable.idempotence: true            # sin duplicados por reintento del productor
+        max.in.flight.requests.per.connection: 5
+        linger.ms: 10
+        delivery.timeout.ms: 30000
+        request.timeout.ms: 10000
+
 digitalfix:
-  services:
-    audit-url: ${AUDIT_URL:http://localhost:8085}
+  # ------------------------------------------------------------------
+  # Streaming Kafka: la orden publica HECHOS (creada, asignada, cambio de
+  # estado, cerrada, cancelada) en workorders.events. Los consumen
+  # ms-digitalfix-report (grupo report-kpis) y ms-digitalfix-audit (grupo
+  # audit-timeline). El topico lo crea digitalfix-infra/kafka/scripts/topics.sh.
+  # ------------------------------------------------------------------
+  kafka:
+    enabled: ${KAFKA_ENABLED:true}
+    source: ms-digitalfix-workorders
+    schema-version: 1
+    topics:
+      workorder-events: workorders.events
 
   # ------------------------------------------------------------------
   # Mensajeria RabbitMQ: UNICO lugar donde se definen nombres de

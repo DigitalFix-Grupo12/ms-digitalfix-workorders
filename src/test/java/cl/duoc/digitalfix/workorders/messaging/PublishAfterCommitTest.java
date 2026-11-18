@@ -21,7 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /** Integracion: el servicio de negocio emite el evento y la capa messaging publica solo si hubo commit. */
-@SpringBootTest(properties = "digitalfix.services.audit-url=http://localhost:1")
+@SpringBootTest
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PublishAfterCommitTest {

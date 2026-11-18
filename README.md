@@ -4,8 +4,8 @@
 
 Propietario de las ordenes de trabajo y de la maquina de estados:
 `CREADA -> ASIGNADA -> EN_DESPLAZAMIENTO -> EN_EJECUCION -> CERRADA` (`CANCELADA` antes de ejecutar).
-No se puede ejecutar sin asignar tecnico. Cada cambio publica un evento en `ms-digitalfix-audit`
-y, despues del commit, los comandos asincronos en RabbitMQ (ver *Mensajeria*).
+No se puede ejecutar sin asignar tecnico. Despues del commit, cada cambio se publica como **hecho** en
+Kafka (`workorders.events`, ver *Streaming*) y como **comandos** asincronos en RabbitMQ (ver *Mensajeria*).
 
 | Metodo | Ruta | Descripcion |
 |---|---|---|
@@ -14,8 +14,31 @@ y, despues del commit, los comandos asincronos en RabbitMQ (ver *Mensajeria*).
 | POST | /api/workorders | Crea (`descripcion`, `clienteId`) -> 201 |
 | PUT | /api/workorders/{id}/status | Cambia estado (`status`, `tecnicoId` al asignar); 409 si la transicion es invalida |
 
-Variables: `AUDIT_URL` (default `http://localhost:8085`), `RABBITMQ_ADDRESSES` (default
-`localhost:5672,localhost:5673`), `RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`, `RABBITMQ_ENABLED` (default `true`).
+Variables: `KAFKA_BOOTSTRAP_SERVERS` (default `localhost:9092,localhost:9093,localhost:9094`),
+`KAFKA_ENABLED` (default `true`), `RABBITMQ_ADDRESSES` (default `localhost:5672,localhost:5673`),
+`RABBITMQ_USERNAME`, `RABBITMQ_PASSWORD`, `RABBITMQ_ENABLED` (default `true`).
+
+## Streaming (productor Kafka)
+
+`streaming.WorkOrderEventStreamer` escucha el evento de dominio **despues del commit** y publica un
+`WorkOrderEvent` en `workorders.events` (3 particiones, RF 3). Lo consumen dos grupos independientes:
+`report-kpis` (ms-digitalfix-report, KPIs en tiempo real) y `audit-timeline` (ms-digitalfix-audit).
+Antes la auditoria se registraba por REST; ahora audit lee el mismo stream (sin acoplamiento ni duplicados).
+
+| Hecho | eventType | Campos relevantes |
+|---|---|---|
+| orden creada | `CREATED` | `status`, `customer` |
+| asignada | `ASSIGNED` | `technician`, `previousStatus` |
+| en desplazamiento / en ejecucion | `STATUS_CHANGED` | `previousStatus`, `status` |
+| cerrada | `CLOSED` | base del KPI de tiempo de resolucion |
+| cancelada | `CANCELLED` | |
+
+- **Clave = id de la orden**: sus eventos caen en la misma particion y se leen en orden.
+- **Envelope**: `eventId` (idempotencia en los consumidores), `schemaVersion`, `occurredAt`, `traceId`,
+  `source` y `actor` (`username`, `role`). JSON sin headers de tipo de Java (`JsonSerializer.noTypeInfo()`).
+- **Productor**: `acks=all`, idempotente, `lz4`, `linger.ms=10`, `batch.size=32KB` (`spring.kafka.producer`).
+  El envio es asincrono; el resultado (particion/offset o error) queda en el log (`[KAFKA]` / `[KAFKA-NO-PUBLICADO]`).
+- Si la transaccion falla (ej. transicion invalida, 409) no se publica nada.
 
 ## Mensajeria (productor RabbitMQ)
 
@@ -41,7 +64,7 @@ guarda y el error queda en el log (`[NO-PUBLICADO]`).
 
 ```
 Angular (MSAL) -> AWS API Gateway -> ms-digitalfix-bff :8080 (valida JWT Entra ID + rol)
-                                         |-> ms-digitalfix-workorders :8082 -> audit
+                                         |-> ms-digitalfix-workorders :8082 -> Kafka workorders.events
                                          |-> ms-digitalfix-catalog    :8083
                                          |-> ms-digitalfix-report     :8084 -> workorders
                                          |-> ms-digitalfix-audit      :8085

@@ -9,7 +9,8 @@ import java.time.Instant;
  * Evento de dominio: una orden se creo (from = null) o cambio de estado.
  * Se publica con el ApplicationEventPublisher de Spring; el servicio de
  * negocio NO conoce RabbitMQ. La capa messaging lo traduce a comandos
- * asincronos despues del commit (ver WorkOrderCommandTranslator).
+ * asincronos despues del commit (ver WorkOrderCommandTranslator) y la capa
+ * streaming lo publica como hecho en Kafka (ver WorkOrderEventStreamer).
  */
 public record WorkOrderStatusChangedEvent(
     Long orderId,
@@ -20,11 +21,14 @@ public record WorkOrderStatusChangedEvent(
     String descripcion,
     Instant createdAt,
     Instant closedAt,
-    String actor
+    String actor,
+    String actorRole,
+    Instant occurredAt
 ) {
-    public static WorkOrderStatusChangedEvent of(WorkOrder order, WorkOrderStatus from, String actor) {
+    public static WorkOrderStatusChangedEvent of(WorkOrder order, WorkOrderStatus from, String actor, String actorRole) {
         return new WorkOrderStatusChangedEvent(order.getId(), from, order.getStatus(), order.getClienteId(),
-            order.getTecnicoId(), order.getDescripcion(), order.getCreatedAt(), order.getClosedAt(), actor);
+            order.getTecnicoId(), order.getDescripcion(), order.getCreatedAt(), order.getClosedAt(),
+            actor, actorRole, Instant.now());
     }
 
     public boolean isCreation() {

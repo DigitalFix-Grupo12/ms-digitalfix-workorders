@@ -1,7 +1,10 @@
 # Tests sin broker: la mensajeria se reemplaza por un publicador en memoria
-# (ver RecordingCommandPublisher en los tests).
+# (ver RecordingCommandPublisher en los tests). Kafka se prueba aparte con un
+# broker embebido (WorkOrderEventStreamingTest).
 digitalfix:
   rabbitmq:
+    enabled: false
+  kafka:
     enabled: false
 management:
   health:

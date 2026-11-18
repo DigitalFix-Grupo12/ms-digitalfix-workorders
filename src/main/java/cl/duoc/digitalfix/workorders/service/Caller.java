@@ -22,6 +22,14 @@ public record Caller(String username, Set<String> roles) {
         return new Caller(username == null || username.isBlank() ? "desconocido" : username.trim(), roles);
     }
 
+    /** Rol principal para auditoria (Admin > Supervisor > Auditor > Cliente); SYSTEM si es interna. */
+    public String primaryRole() {
+        for (String role : new String[] {"Admin", "Supervisor", "Auditor", "Cliente"}) {
+            if (roles.contains(role)) return role;
+        }
+        return roles.isEmpty() ? "SYSTEM" : roles.iterator().next();
+    }
+
     public boolean isInternal() {
         return roles.isEmpty();
     }

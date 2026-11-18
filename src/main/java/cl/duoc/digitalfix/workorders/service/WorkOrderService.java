@@ -1,6 +1,5 @@
 package cl.duoc.digitalfix.workorders.service;
 
-import cl.duoc.digitalfix.workorders.client.AuditClient;
 import cl.duoc.digitalfix.workorders.dto.StatusChangeDto;
 import cl.duoc.digitalfix.workorders.dto.WorkOrderDto;
 import cl.duoc.digitalfix.workorders.entity.WorkOrder;
@@ -22,19 +21,19 @@ import java.util.List;
  * (clienteId = usuario del token). Admin/Supervisor ven todas.
  *
  * Cada creacion o cambio de estado emite un WorkOrderStatusChangedEvent
- * (evento de dominio de Spring). Este servicio no sabe si ese evento termina
- * en RabbitMQ: la traduccion a comandos vive en el paquete messaging.
+ * (evento de dominio de Spring). Este servicio no conoce RabbitMQ ni Kafka:
+ * despues del commit, el paquete messaging lo traduce a comandos (RabbitMQ) y
+ * el paquete streaming lo publica como hecho en workorders.events (Kafka),
+ * de donde lo leen reporteria y auditoria.
  */
 @Service
 public class WorkOrderService {
 
     private final WorkOrderRepository repository;
-    private final AuditClient audit;
     private final ApplicationEventPublisher events;
 
-    public WorkOrderService(WorkOrderRepository repository, AuditClient audit, ApplicationEventPublisher events) {
+    public WorkOrderService(WorkOrderRepository repository, ApplicationEventPublisher events) {
         this.repository = repository;
-        this.audit = audit;
         this.events = events;
     }
 
@@ -78,8 +77,7 @@ public class WorkOrderService {
         order.setClienteId(clienteId);
         order.setStatus(WorkOrderStatus.CREADA);
         WorkOrder saved = repository.save(order);
-        audit.record(caller.username(), "CREO orden #" + saved.getId(), saved.getId());
-        events.publishEvent(WorkOrderStatusChangedEvent.of(saved, null, caller.username()));
+        events.publishEvent(WorkOrderStatusChangedEvent.of(saved, null, caller.username(), caller.primaryRole()));
         return saved;
     }
 
@@ -111,11 +109,7 @@ public class WorkOrderService {
         order.setStatus(to);
         WorkOrder saved = repository.saveAndFlush(order);
 
-        String accion = to == WorkOrderStatus.ASIGNADA
-            ? "ASIGNO orden #%d a %s".formatted(id, order.getTecnicoId())
-            : "CAMBIO orden #%d: %s -> %s".formatted(id, from, to);
-        audit.record(caller.username(), accion, id);
-        events.publishEvent(WorkOrderStatusChangedEvent.of(saved, from, caller.username()));
+        events.publishEvent(WorkOrderStatusChangedEvent.of(saved, from, caller.username(), caller.primaryRole()));
         return saved;
     }
 
