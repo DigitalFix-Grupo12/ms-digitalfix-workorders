@@ -97,3 +97,8 @@ management:
     web:
       exposure:
         include: health,info
+  # El chequeo de RabbitMQ sigue al flag de mensajeria: si se ejecuta solo
+  # con Kafka (RABBITMQ_ENABLED=false) el servicio no debe reportarse DOWN.
+  health:
+    rabbit:
+      enabled: ${RABBITMQ_ENABLED:true}
